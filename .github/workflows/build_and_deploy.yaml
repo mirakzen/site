@@ -108,8 +108,12 @@ jobs:
             mkdir ~/builds/${{ env.MIR_SITE_NAME }}_alembic_${{ env.MIR_SITE_ALEMBIC_ENV }}
             tar -xf ~/builds/${{ env.MIR_SITE_NAME }}_alembic_${{ env.MIR_SITE_ALEMBIC_ENV }}.tar -C ~/builds/${{ env.MIR_SITE_NAME }}_alembic_${{ env.MIR_SITE_ALEMBIC_ENV }}/
             cd ~/builds/${{ env.MIR_SITE_NAME }}_alembic_${{ env.MIR_SITE_ALEMBIC_ENV }}/backend-python
+            python3 -m virtualenv venv
+            . venv/bin/activate
+            pip3 install -r requirements_for_developer.txt
             export MIR_SITE_DB_DSN=${{ env.MIR_SITE__DB_DSN }}
             python3 -m alembic upgrade head
+            deactivate
             cd ~
             rm ~/builds/${{ env.MIR_SITE_NAME }}_alembic_${{ env.MIR_SITE_ALEMBIC_ENV }}.tar
 
