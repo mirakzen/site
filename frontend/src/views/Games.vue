@@ -133,7 +133,7 @@
                                         <p v-if="dataModal.comment"><span class="font-bold">Комментарий: </span>{{ dataModal.comment }}</p>
                                         <p><span class="font-bold">Жанр: </span>{{ dataModal.genre }}</p>
                                         <div class="flex flex-wrap justify-center">
-                                            <span class="font-bold mr-1">Статусы: </span>
+                                            <span class="font-bold mr-1">Статус: </span>
                                             <template v-for="(status, index) in dataModal.statuses">
                                                 <template v-if="index > 0">,</template>
                                                 {{ status.name }}
