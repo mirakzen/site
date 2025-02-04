@@ -60,7 +60,7 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           push: true
-          # file: backend/Dockerfile
+          file: ./backend-python/Dockerfile
           build-args: |
             APP_COMMIT_BRANCH=${{ github.ref_name }}
             APP_COMMIT_HASH=${{ steps.define_build_params.outputs.COMMIT_HASH }}
