@@ -1,0 +1,213 @@
+name: Build and deploy app
+run-name: Build and deploy app from branch ${{ github.ref_name }} to ${{ inputs.target }} env with ${{ inputs.docker_port }} port
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Environment for deployment"
+        required: true
+        default: 'prod'
+        type: choice
+        options:
+          - prod
+      docker_port:
+        description: "Port for running docker"
+        default: '8542'
+
+env:
+  MIR_SITE_NAME: mir_site
+  MIR_SITE_DOCKER_REGISTRY: ghcr.io
+
+jobs:
+  build_backend:
+    runs-on: ubuntu-latest
+    name: Build and push backend docker
+    defaults:
+      run:
+        working-directory: ./backend-python/
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      full_image_name: ${{ steps.define_build_params.outputs.FULL_IMAGE_NAME }}
+      image_name: ${{ steps.define_build_params.outputs.IMAGE_NAME }}
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Define build params
+        id: define_build_params
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+          FULL_REPO: ${{ github.repository }}
+          REPO: ${{ github.event.repository.name }}
+          TARGET: ${{ inputs.target }}
+        run: |
+          echo "COMMIT_HASH=${COMMIT_SHA:0:7}" >>${GITHUB_OUTPUT}
+          echo "COMMIT_TIME=$(TZ=UTC git log -1 --format=%cd --date=iso-local)" >>${GITHUB_OUTPUT}
+          echo "BUILD_TIME=$(TZ=UTC date +"%Y-%m-%d %H:%M:%S %z")" >>${GITHUB_OUTPUT}
+          echo "FULL_IMAGE_NAME=${FULL_REPO,,}/${TARGET}" >>${GITHUB_OUTPUT}
+          echo "IMAGE_NAME=${REPO,,}/${TARGET}" >>${GITHUB_OUTPUT}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.MIR_SITE_DOCKER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.PAT_GH }}
+      - name: Build and push
+        uses: docker/build-push-action@v4
+        with:
+          push: true
+          # file: backend/Dockerfile
+          build-args: |
+            APP_COMMIT_BRANCH=${{ github.ref_name }}
+            APP_COMMIT_HASH=${{ steps.define_build_params.outputs.COMMIT_HASH }}
+            APP_COMMIT_TIME=${{ steps.define_build_params.outputs.COMMIT_TIME }}
+            APP_BUILD_TIME=${{ steps.define_build_params.outputs.BUILD_TIME }}
+            APP_BUILD_NUMBER=${{ github.run_number }}
+          tags: ${{ env.MIR_SITE_DOCKER_REGISTRY }}/${{ steps.define_build_params.outputs.FULL_IMAGE_NAME }}:latest
+
+  alembic_backend:
+    runs-on: ubuntu-latest
+    name: Alembic
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.ref_name }}
+      - name: TAR code
+        env:
+          MIR_SITE_ALEMBIC_ENV: ${{ inputs.target }}
+        run: tar -cvf ${{ env.MIR_SITE_NAME }}_alembic_${{ env.MIR_SITE_ALEMBIC_ENV }}.tar .
+      - name: Copy code to host
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          passphrase: ${{ secrets.SSH_PASSPHRASE }}
+          port: ${{ secrets.SSH_PORT }}
+          source: "${{ env.MIR_SITE_NAME }}_alembic_${{ inputs.target }}.tar"
+          target: "~/builds"
+      - name: Apply alembic
+        uses: appleboy/ssh-action@v1.0.0
+        env:
+          MIR_SITE_ALEMBIC_ENV: ${{ inputs.target }}
+          MIR_SITE__DB_DSN: ${{ secrets.DB_DSN_MIR_SITE_PROD }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          passphrase: ${{ secrets.SSH_PASSPHRASE }}
+          port: ${{ secrets.SSH_PORT }}
+          script_stop: true
+          script: |
+            sudo rm -rf ~/builds/${{ env.MIR_SITE_NAME }}_alembic_${{ env.MIR_SITE_ALEMBIC_ENV }} || true
+            mkdir ~/builds/${{ env.MIR_SITE_NAME }}_alembic_${{ env.MIR_SITE_ALEMBIC_ENV }}
+            tar -xf ~/builds/${{ env.MIR_SITE_NAME }}_alembic_${{ env.MIR_SITE_ALEMBIC_ENV }}.tar -C ~/builds/${{ env.MIR_SITE_NAME }}_alembic_${{ env.MIR_SITE_ALEMBIC_ENV }}/
+            cd ~/builds/${{ env.MIR_SITE_NAME }}_alembic_${{ env.MIR_SITE_ALEMBIC_ENV }}/backend-python
+            export MIR_SITE_DB_DSN=${{ env.MIR_SITE__DB_DSN }}
+            python3 -m alembic upgrade head
+            cd ~
+            rm ~/builds/${{ env.MIR_SITE_NAME }}_alembic_${{ env.MIR_SITE_ALEMBIC_ENV }}.tar
+
+  deploy_frontend:
+    runs-on: ubuntu-latest
+    name: Build and deploy frontend
+    defaults:
+      run:
+        working-directory: ./frontend/
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Node build
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20.x'
+      - run: npm ci
+      - run: npm run build
+      - name: TAR build
+        env:
+          MIR_SITE_FRONTEND_ENV: ${{ inputs.target }}
+        run: tar -cvf ${{ env.MIR_SITE_NAME }}_frontend_${{ env.MIR_SITE_FRONTEND_ENV }}.tar dist/
+      - name: Copy TAR to host
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          passphrase: ${{ secrets.SSH_PASSPHRASE }}
+          port: ${{ secrets.SSH_PORT }}
+          source: "${{ env.MIR_SITE_NAME }}_frontend_${{ inputs.target }}.tar"
+          target: "~/builds"
+      - name: Deploy on host
+        uses: appleboy/ssh-action@v1.0.0
+        env:
+          MIR_SITE_FRONTEND_ENV: ${{ inputs.target }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          passphrase: ${{ secrets.SSH_PASSPHRASE }}
+          port: ${{ secrets.SSH_PORT }}
+          script_stop: true
+          script: |
+            sudo rm ~/build_artifacts/${{ env.MIR_SITE_NAME }}_frontend_${{ env.MIR_SITE_FRONTEND_ENV }}.tar || true
+            sudo mv ~/builds/${{ env.MIR_SITE_NAME }}_frontend_${{ env.MIR_SITE_FRONTEND_ENV }}.tar ~/build_artifacts/
+            sudo rm -rf /var/www/${{ env.MIR_SITE_NAME }}_frontend_${{ env.MIR_SITE_FRONTEND_ENV }}/*
+            sudo tar -xf ~/build_artifacts/${{ env.MIR_SITE_NAME }}_frontend_${{ env.MIR_SITE_FRONTEND_ENV }}.tar -C /var/www/${{ env.MIR_SITE_NAME }}_frontend_${{ env.MIR_SITE_FRONTEND_ENV }}/
+            sudo chmod -R 755 /var/www/${{ env.MIR_SITE_NAME }}_frontend_${{ env.MIR_SITE_FRONTEND_ENV }}/
+
+  deploy_backend:
+    runs-on: ubuntu-latest
+    name: Deploy backend docker
+    needs: [build_backend, alembic_backend]
+    steps:
+      - name: Deploy
+        uses: appleboy/ssh-action@v1.0.0
+        env:
+          MIR_SITE_BACKEND_ENV: ${{ inputs.target }}
+          MIR_SITE_DEPLOY_FULL_IMAGE_NAME: ${{ needs.build_backend.outputs.full_image_name }}
+          MIR_SITE_DEPLOY_PAT_GH: ${{ secrets.PAT_GH }}
+          MIR_SITE_DEPLOY_GH_LOGIN: ${{ github.actor }}
+          MIR_SITE_DEPLOY_DOCKER_PORT: ${{ inputs.docker_port }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          passphrase: ${{ secrets.SSH_PASSPHRASE }}
+          port: ${{ secrets.SSH_PORT }}
+          script_stop: true
+          script: |
+            docker login ${{ env.MIR_SITE_DOCKER_REGISTRY }} -u ${{ env.MIR_SITE_DEPLOY_GH_LOGIN }} -p ${{ env.MIR_SITE_DEPLOY_PAT_GH }}
+            echo "-------- Try to stop ${{ env.MIR_SITE_NAME }}-backend-${{ env.MIR_SITE_BACKEND_ENV }} container"
+            docker stop ${{ env.MIR_SITE_NAME }}-backend-${{ env.MIR_SITE_BACKEND_ENV }} || true
+            echo "-------- Try to delete ${{ env.MIR_SITE_NAME }}-backend-${{ env.MIR_SITE_BACKEND_ENV }} container"
+            docker container rm ${{ env.MIR_SITE_NAME }}-backend-${{ env.MIR_SITE_BACKEND_ENV }} || true
+            echo "-------- Try to delete ${{ env.MIR_SITE_DEPLOY_FULL_IMAGE_NAME }} image"
+            docker rmi ${{ env.MIR_SITE_DOCKER_REGISTRY }}/${{ env.MIR_SITE_DEPLOY_FULL_IMAGE_NAME }} || true
+            echo "-------- Try to pull and run ${{ env.MIR_SITE_DEPLOY_FULL_IMAGE_NAME }} image"
+            docker run -d \
+              -it \
+              --name ${{ env.MIR_SITE_NAME }}-backend-${{ env.MIR_SITE_BACKEND_ENV }} \
+              --restart always \
+              --network=host \
+              -e APP_HOST=127.0.0.1 \
+              -e APP_PORT=${{ env.MIR_SITE_DEPLOY_DOCKER_PORT }} \
+              -e APP_ENV=${{ env.MIR_SITE_BACKEND_ENV }} \
+              --mount type=bind,source=/home/${{ env.MIR_SITE_DEPLOY_GH_LOGIN }}/deploy_configs/${{ env.MIR_SITE_NAME }}-backend-${{ env.MIR_SITE_BACKEND_ENV }}/config.yaml,target=/application/config/config.yaml \
+              ${{ env.MIR_SITE_DOCKER_REGISTRY }}/${{ env.MIR_SITE_DEPLOY_FULL_IMAGE_NAME }}:latest
+            docker logout "${{ env.MIR_SITE_DOCKER_REGISTRY }}"
+
+      - name: Delete old images
+        uses: actions/delete-package-versions@v4
+        if: ${{ always() }}
+        with:
+          package-name: ${{ needs.build_backend.outputs.image_name }}
+          package-type: 'container'
+          min-versions-to-keep: 1
+          token: ${{ secrets.PAT_GH }}
