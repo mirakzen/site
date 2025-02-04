@@ -167,8 +167,7 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           script_stop: true
           script: |
-            sudo rm -f ~/build_artifacts/${{ env.MIR_SITE_NAME }}_frontend_${{ env.MIR_SITE_FRONTEND_ENV }}.tar || true
-            sudo mv ~/builds/${{ env.MIR_SITE_NAME }}_frontend_${{ env.MIR_SITE_FRONTEND_ENV }}.tar ~/build_artifacts/
+            sudo mv ~/builds/frontend/${{ env.MIR_SITE_NAME }}_frontend_${{ env.MIR_SITE_FRONTEND_ENV }}.tar ~/build_artifacts/
             sudo rm -rf /var/www/${{ env.MIR_SITE_NAME }}_frontend_${{ env.MIR_SITE_FRONTEND_ENV }}/*
             sudo tar -xf ~/build_artifacts/${{ env.MIR_SITE_NAME }}_frontend_${{ env.MIR_SITE_FRONTEND_ENV }}.tar -C /var/www/${{ env.MIR_SITE_NAME }}_frontend_${{ env.MIR_SITE_FRONTEND_ENV }}/
             sudo chmod -R 755 /var/www/${{ env.MIR_SITE_NAME }}_frontend_${{ env.MIR_SITE_FRONTEND_ENV }}/
