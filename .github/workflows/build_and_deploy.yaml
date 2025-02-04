@@ -138,13 +138,6 @@ jobs:
         env:
           MIR_SITE_FRONTEND_ENV: ${{ inputs.target }}
         run: tar -cvf ${{ env.MIR_SITE_NAME }}_frontend_${{ env.MIR_SITE_FRONTEND_ENV }}.tar dist/
-      - name: ls tar
-        env:
-          MIR_SITE_FRONTEND_ENV: ${{ inputs.target }}
-        run: | 
-          tar -tvf ${{ env.MIR_SITE_NAME }}_frontend_${{ env.MIR_SITE_FRONTEND_ENV }}.tar
-          ls -l
-          pwd
       - name: Copy TAR to host
         uses: appleboy/scp-action@master
         with:
