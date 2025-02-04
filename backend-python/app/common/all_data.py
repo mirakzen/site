@@ -1,4 +1,3 @@
-from adaptix import Retort
 from crud.games import GamesData
 from crud.games_statuses import GamesStatusesData
 from crud.projects import ProjectsData
@@ -8,8 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 class AllData:
     def __init__(self) -> None:
-        self.retort = Retort()
-
         self.GAMES = GamesData()
         self.GAMES_STATUSES = GamesStatusesData()
         self.PROJECTS = ProjectsData()
