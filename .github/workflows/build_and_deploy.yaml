@@ -153,7 +153,7 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           passphrase: ${{ secrets.SSH_PASSPHRASE }}
           port: ${{ secrets.SSH_PORT }}
-          source: "${{ env.MIR_SITE_NAME }}_frontend_${{ inputs.target }}.tar"
+          source: "frontend/${{ env.MIR_SITE_NAME }}_frontend_${{ inputs.target }}.tar"
           target: "~/builds"
       - name: Deploy on host
         uses: appleboy/ssh-action@v1.0.0
