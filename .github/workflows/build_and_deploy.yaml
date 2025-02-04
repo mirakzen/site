@@ -60,7 +60,7 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           push: true
-          # file: backend/Dockerfile
+          file: ./backend-python/Dockerfile
           build-args: |
             APP_COMMIT_BRANCH=${{ github.ref_name }}
             APP_COMMIT_HASH=${{ steps.define_build_params.outputs.COMMIT_HASH }}
@@ -109,7 +109,7 @@ jobs:
             tar -xf ~/builds/${{ env.MIR_SITE_NAME }}_alembic_${{ env.MIR_SITE_ALEMBIC_ENV }}.tar -C ~/builds/${{ env.MIR_SITE_NAME }}_alembic_${{ env.MIR_SITE_ALEMBIC_ENV }}/
             cd ~/builds/${{ env.MIR_SITE_NAME }}_alembic_${{ env.MIR_SITE_ALEMBIC_ENV }}/backend-python
             export MIR_SITE_DB_DSN=${{ env.MIR_SITE__DB_DSN }}
-            python3 -m alembic upgrade head
+            python3.10 -m alembic upgrade head
             cd ~
             rm ~/builds/${{ env.MIR_SITE_NAME }}_alembic_${{ env.MIR_SITE_ALEMBIC_ENV }}.tar
 
@@ -124,12 +124,16 @@ jobs:
         uses: actions/checkout@v3
         with:
           ref: ${{ github.ref_name }}
-      - name: Node build
+      - name: Node setup
         uses: actions/setup-node@v3
         with:
           node-version: '20.x'
-      - run: npm ci
-      - run: npm run build
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - name: Npm build
+        run: |
+          npm ci
+          npm run build
       - name: TAR build
         env:
           MIR_SITE_FRONTEND_ENV: ${{ inputs.target }}
@@ -142,7 +146,7 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           passphrase: ${{ secrets.SSH_PASSPHRASE }}
           port: ${{ secrets.SSH_PORT }}
-          source: "${{ env.MIR_SITE_NAME }}_frontend_${{ inputs.target }}.tar"
+          source: "frontend/${{ env.MIR_SITE_NAME }}_frontend_${{ inputs.target }}.tar"
           target: "~/builds"
       - name: Deploy on host
         uses: appleboy/ssh-action@v1.0.0
@@ -156,8 +160,8 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           script_stop: true
           script: |
-            sudo rm ~/build_artifacts/${{ env.MIR_SITE_NAME }}_frontend_${{ env.MIR_SITE_FRONTEND_ENV }}.tar || true
-            sudo mv ~/builds/${{ env.MIR_SITE_NAME }}_frontend_${{ env.MIR_SITE_FRONTEND_ENV }}.tar ~/build_artifacts/
+            sudo [ ! -e ~/build_artifacts/${{ env.MIR_SITE_NAME }}_frontend_${{ env.MIR_SITE_FRONTEND_ENV }}.tar ] || sudo rm -f ~/build_artifacts/${{ env.MIR_SITE_NAME }}_frontend_${{ env.MIR_SITE_FRONTEND_ENV }}.tar || true
+            sudo mv ~/builds/frontend/${{ env.MIR_SITE_NAME }}_frontend_${{ env.MIR_SITE_FRONTEND_ENV }}.tar ~/build_artifacts/
             sudo rm -rf /var/www/${{ env.MIR_SITE_NAME }}_frontend_${{ env.MIR_SITE_FRONTEND_ENV }}/*
             sudo tar -xf ~/build_artifacts/${{ env.MIR_SITE_NAME }}_frontend_${{ env.MIR_SITE_FRONTEND_ENV }}.tar -C /var/www/${{ env.MIR_SITE_NAME }}_frontend_${{ env.MIR_SITE_FRONTEND_ENV }}/
             sudo chmod -R 755 /var/www/${{ env.MIR_SITE_NAME }}_frontend_${{ env.MIR_SITE_FRONTEND_ENV }}/

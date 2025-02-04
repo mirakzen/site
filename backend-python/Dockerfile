@@ -3,10 +3,10 @@ FROM python:3.10-slim
 WORKDIR /application
 
 RUN mkdir /application/config
-COPY ./requirements.txt /application/requirements.txt
+COPY ./backend-python/requirements.txt /application/requirements.txt
 RUN pip install --no-cache-dir -r /application/requirements.txt
 
-COPY ./app /application/app
+COPY ./backend-python/app /application/app
 
 ARG APP_COMMIT_BRANCH=""
 ARG APP_COMMIT_HASH=""
