@@ -1,13 +1,13 @@
 <template>
-    <header class="fixed w-full bg-mir-main border-b border-mir-highlight">
+    <header class="fixed w-full bg-mir-main border-b border-mir-highlight z-30">
         <nav class="mx-auto flex items-center justify-between max-w-screen-xl p-4 sm:px-6 lg:px-8" aria-label="Global">
-            <div class="flex md:flex-1 z-30">
+            <div class="flex md:flex-1">
                 <router-link to="/" class="flex place-items-center my-auto">
                     <span class="text-lg md:text-xl font-bold leading-6 md:hover:text-mir-highlight">MIR</span>
                 </router-link>
             </div>
 
-            <div class="flex z-10 lg:hidden">
+            <div class="flex lg:hidden">
                 <Menu v-slot="{ close }">
                     <MenuButton class="-m-2.5 p-2.5 rounded-md inline-flex items-center justify-center">
                         <font-awesome-icon icon="fa-solid fa-bars" class="h-8 w-8 sm:h-10 sm:w-10" aria-hidden="true" />
@@ -26,7 +26,7 @@
                 </Menu>
             </div>
 
-            <div class="hidden lg:flex lg:gap-x-8 xl:gap-x-12 text-lg md:text-xl font-semibold leading-6 z-20">
+            <div class="hidden lg:flex lg:gap-x-8 xl:gap-x-12 text-lg md:text-xl font-semibold leading-6">
                 <div v-for="link in header_links" :key="link.name">
                     <router-link :key="link.url" :to="link.url" class="sm:hover:text-mir-highlight">{{ link.name }}</router-link>
                 </div>

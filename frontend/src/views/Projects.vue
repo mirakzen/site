@@ -6,12 +6,14 @@
         </div>
 
         <div
-            v-for="project in projects" :key="project.id"
+            v-for="project in projects" :key="project.order" :id="'disclosure' + project.id"
             class="overflow-hidden w-full mt-3 sm:mt-4 bg-mir-secondary rounded-md"
         >
-            <Disclosure v-slot="{ open }">
+            <Disclosure v-slot="{ open, close }" :key="project.id">
                 <DisclosureButton
                     class="w-full p-2 sm:p-4 flex place-items-center justify-between select-text"
+                    :ref="_ => (disclosures[project.id-1] = close)"
+                    @click="hideOtherDisclosures(project.id-1)"
                 >
                     <div class="text-base sm:text-lg w-full">
                         <div class="text-mir-link text-justify" :class="project.summary ? 'mb-2' : ''">{{ project.name }}</div>
@@ -139,6 +141,24 @@
     } from '@headlessui/vue';
     import { marked } from 'marked';
     import api_get from '@/utils/api_get';
+
+    const disclosures = ref([]);
+
+    function hideOtherDisclosures(id) {
+        disclosures.value.filter((_, d_id) => d_id != id).forEach(c => c());
+
+        // const element = document.getElementById("disclosure" + id);
+        // element.scrollIntoView();
+
+        // location.href = "#";
+        // location.href = "#disclosure" + id;
+
+        // const element = document.getElementById("disclosure" + id);
+        // const y = element.getBoundingClientRect().top + window.scrollY;
+        // window.scrollTo({ top: y });
+
+        // window.scrollTo({ top: 0 });
+    };
 
     const isOpen = ref(false);
     const dataModal = ref(
